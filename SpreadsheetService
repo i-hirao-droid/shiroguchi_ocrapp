@@ -1,0 +1,148 @@
+/**
+ * 請求書データをスプレッドシートに書き込む（3シート + 既存シート）
+ */
+function writeToSpreadsheet(invoiceData, fileName) {
+  var ss = getOrCreateSpreadsheet_();
+  var timestamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+
+  // 既存の請求書データシートへの書き込み
+  writeOriginalSheet_(ss, invoiceData, fileName, timestamp);
+
+  // 新しい3シートへの書き込み
+  writeBasicInfoSheet_(ss, invoiceData, fileName, timestamp);
+  writeDetailSheet_(ss, invoiceData, fileName, timestamp);
+  writeCodeSummarySheet_(ss, invoiceData, fileName, timestamp);
+
+  return ss.getUrl();
+}
+
+/**
+ * A列の実際の最終行を取得する（罫線や書式による誤検知を完全に防止）
+ */
+function getLastDataRow_(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow === 0) return 1;
+  var values = sheet.getRange(1, 1, lastRow, 1).getValues();
+  for (var i = values.length - 1; i >= 0; i--) {
+    if (values[i][0] !== '') {
+      return i + 1;
+    }
+  }
+  return 1;
+}
+
+function writeOriginalSheet_(ss, invoiceData, fileName, timestamp) {
+  var sheet = getOrCreateSheet_(ss, '請求書データ', [
+    '処理日時', 'ファイル名', '請求書番号', '発行日', '支払期限',
+    '請求元', '請求先', '品目名', '数量', '単価', '金額',
+    '小計', '税率(%)', '消費税額', '合計金額'
+  ]);
+  var lineItems = invoiceData.line_items || [];
+  function v(val) { return val != null ? val : ''; }
+  var lastRow = getLastDataRow_(sheet);
+
+  if (lineItems.length === 0) {
+    var row = [
+      timestamp, fileName,
+      v(invoiceData.invoice_number), v(invoiceData.issue_date), v(invoiceData.due_date),
+      v(invoiceData.sender_name), v(invoiceData.recipient_name),
+      '', '', '', '',
+      v(invoiceData.subtotal), v(invoiceData.tax_rate),
+      v(invoiceData.tax_amount), v(invoiceData.total_amount)
+    ];
+    sheet.getRange(lastRow + 1, 1, 1, row.length).setValues([row]);
+  } else {
+    var rows = lineItems.map(function(item) {
+      return [
+        timestamp, fileName,
+        v(invoiceData.invoice_number), v(invoiceData.issue_date), v(invoiceData.due_date),
+        v(invoiceData.sender_name), v(invoiceData.recipient_name),
+        v(item.item_name), v(item.quantity), v(item.unit_price), v(item.amount),
+        v(invoiceData.subtotal), v(invoiceData.tax_rate),
+        v(invoiceData.tax_amount), v(invoiceData.total_amount)
+      ];
+    });
+    sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length).setValues(rows);
+  }
+}
+
+function writeBasicInfoSheet_(ss, invoiceData, fileName, timestamp) {
+  var sheet = getOrCreateSheet_(ss, '基本情報', [
+    '処理日時', 'ファイル名', '請求元', '請求日', '納品先名', '商品合計', '消費税', '総合計'
+  ]);
+  function v(val) { return val != null ? val : ''; }
+  var row = [
+    timestamp, fileName, v(invoiceData.sender_name), v(invoiceData.issue_date),
+    v(invoiceData.delivery_destination), v(invoiceData.subtotal),
+    v(invoiceData.tax_amount), v(invoiceData.total_amount)
+  ];
+  var lastRow = getLastDataRow_(sheet);
+  sheet.getRange(lastRow + 1, 1, 1, row.length).setValues([row]);
+}
+
+function writeDetailSheet_(ss, invoiceData, fileName, timestamp) {
+  var sheet = getOrCreateSheet_(ss, '明細', [
+    '処理日時', 'ファイル名', '納品日', '商品名', '数量', '単価', '実予記号', '金額'
+  ]);
+  var lineItems = invoiceData.line_items || [];
+  if (lineItems.length === 0) return;
+
+  function v(val) { return val != null ? val : ''; }
+  var rows = lineItems.map(function(item) {
+    return [
+      timestamp, fileName, v(item.delivery_date), v(item.item_name),
+      v(item.quantity), v(item.unit_price), v(item.jitsuyo_kigo), v(item.amount)
+    ];
+  });
+  var lastRow = getLastDataRow_(sheet);
+  sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length).setValues(rows);
+}
+
+function writeCodeSummarySheet_(ss, invoiceData, fileName, timestamp) {
+  var sheet = getOrCreateSheet_(ss, '実予記号集計', [
+    '処理日時', 'ファイル名', '現場名', '実予記号', '合計金額', '明細数'
+  ]);
+  var lineItems = invoiceData.line_items || [];
+  if (lineItems.length === 0) return;
+
+  function v(val) { return val != null ? val : ''; }
+  var groups = {};
+  lineItems.forEach(function(item) {
+    var code = item.jitsuyo_kigo || '(未分類)';
+    if (!groups[code]) groups[code] = { total: 0, count: 0 };
+    groups[code].total += (item.amount || 0);
+    groups[code].count += 1;
+  });
+
+  var rows = Object.keys(groups).map(function(code) {
+    return [
+      timestamp, fileName, v(invoiceData.delivery_destination),
+      code, groups[code].total, groups[code].count
+    ];
+  });
+  var lastRow = getLastDataRow_(sheet);
+  sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length).setValues(rows);
+}
+
+function getOrCreateSpreadsheet_() {
+  var props = PropertiesService.getScriptProperties();
+  var ssId = props.getProperty('SPREADSHEET_ID');
+  if (ssId) {
+    try {
+      return SpreadsheetApp.openById(ssId);
+    } catch (e) {
+      throw new Error('スプレッドシート(ID: ' + ssId + ')を開けません。権限を確認してください。');
+    }
+  }
+  throw new Error('SPREADSHEET_ID が設定されていません。');
+}
+
+function getOrCreateSheet_(ss, sheetName, headers) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (sheet) return sheet;
+  sheet = ss.insertSheet(sheetName);
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+  return sheet;
+}
