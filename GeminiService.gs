@@ -48,6 +48,7 @@ function extractOnePageWithGemini(pageData, pageNum, totalPages) {
     }],
     generationConfig: {
       responseMimeType: 'application/json',
+      maxOutputTokens: 16384,
       responseSchema: {
         type: 'OBJECT',
         properties: {
@@ -108,16 +109,53 @@ function extractOnePageWithGemini(pageData, pageNum, totalPages) {
   }
 
   var result = JSON.parse(response.getContentText());
-  var text = result.candidates[0].content.parts
-    .filter(function(p) { return p.text; })
-    .map(function(p) { return p.text; })
-    .join('');
+  var candidate = result.candidates && result.candidates[0];
+  if (!candidate) {
+    Logger.log('p.' + pageNum + ' candidatesが空: ' + response.getContentText().substring(0, 300));
+    throw new Error('Geminiがcandidatesを返しませんでした（プロンプトがブロックされた可能性）。');
+  }
+
+  var finishReason = candidate.finishReason || '';
+  var parts = (candidate.content && candidate.content.parts) || [];
+  var text = parts.filter(function(p) { return p.text; }).map(function(p) { return p.text; }).join('');
+
+  Logger.log('p.' + pageNum + ' finishReason=' + finishReason + ' text_len=' + text.length);
+
+  if (finishReason === 'MAX_TOKENS') {
+    Logger.log('p.' + pageNum + ' MAX_TOKENS検出。maxOutputTokens=32768で再試行します。');
+    payload.generationConfig.maxOutputTokens = 32768;
+    var retryResp = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    if (retryResp.getResponseCode() !== 200) {
+      throw new Error('MAX_TOKENS再試行も失敗 (HTTP ' + retryResp.getResponseCode() + ')');
+    }
+    result = JSON.parse(retryResp.getContentText());
+    candidate = result.candidates && result.candidates[0];
+    if (!candidate) throw new Error('再試行でcandidatesが空でした。');
+    finishReason = candidate.finishReason || '';
+    parts = (candidate.content && candidate.content.parts) || [];
+    text = parts.filter(function(p) { return p.text; }).map(function(p) { return p.text; }).join('');
+    Logger.log('p.' + pageNum + ' 再試行 finishReason=' + finishReason + ' text_len=' + text.length);
+    if (finishReason === 'MAX_TOKENS') {
+      throw new Error('出力が32768トークンでも上限に達しました（MAX_TOKENS）。1ページの明細を分割する必要があります。');
+    }
+  }
+  if (finishReason === 'SAFETY' || finishReason === 'PROHIBITED_CONTENT' || finishReason === 'BLOCKLIST') {
+    throw new Error('Geminiに応答がブロックされました（finishReason=' + finishReason + '）。');
+  }
+  if (!text) {
+    throw new Error('Geminiの応答が空です（finishReason=' + finishReason + '）。');
+  }
 
   try {
     return propagateJitsuyoKigo_(JSON.parse(text));
   } catch (e) {
-    Logger.log('Gemini応答のJSONパースまたは処理に失敗: ' + e.message);
-    throw new Error('データの解析処理中にエラーが発生しました。');
+    Logger.log('p.' + pageNum + ' JSONパース失敗: ' + e.message + ' / head=' + text.substring(0, 200));
+    throw new Error('データの解析処理中にエラーが発生しました（finishReason=' + finishReason + '）。');
   }
 }
 
@@ -161,4 +199,3 @@ function propagateJitsuyoKigo_(data) {
   });
   return data;
 }
-
