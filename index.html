@@ -182,6 +182,8 @@
         progressLabel.textContent = totalPages + 'ページをJPEGに変換完了';
 
         var pageResults = [];
+        var failedPages = [];
+        var emptyPages = [];
         for (var i = 0; i < totalPages; i++) {
           progressFill.style.width = (10 + Math.round((i / totalPages) * 85)) + '%';
           progressLabel.textContent = 'ページ ' + (i + 1) + ' / ' + totalPages + ' をAI解析中...';
@@ -194,7 +196,18 @@
               .processOnePage(pageImages[i], i + 1, totalPages);
           });
 
-          try { pageResults.push(JSON.parse(rawResult)); } catch (e) { pageResults.push({ line_items: [] }); }
+          var parsed;
+          try {
+            parsed = JSON.parse(rawResult);
+          } catch (e) {
+            parsed = { line_items: [], error: 'レスポンスのパースに失敗: ' + e.message };
+          }
+          pageResults.push(parsed);
+          if (parsed.error) {
+            failedPages.push({ page: i + 1, message: parsed.error });
+          } else if (!parsed.line_items || parsed.line_items.length === 0) {
+            emptyPages.push(i + 1);
+          }
         }
 
         var mergedData = mergePageResults(pageResults);
@@ -202,7 +215,15 @@
 
         progressFill.style.width = '100%';
         progressLabel.textContent = '全' + totalPages + 'ページ処理完了';
-        showStatus('OCR処理が完了しました。内容を確認・修正して「スプレッドシートに保存」を押してください。', 'success');
+
+        if (failedPages.length > 0) {
+          var detail = failedPages.map(function(f) { return 'p.' + f.page + ': ' + f.message; }).join(' / ');
+          showStatus('⚠ ' + failedPages.length + 'ページで抽出に失敗しました（' + detail + '）。再実行するか、明細を手入力してください。', 'error');
+        } else if (emptyPages.length > 0) {
+          showStatus('OCR処理完了。ただし明細0件のページがあります: p.' + emptyPages.join(', p.') + '（空ページなら正常、明細があるページなら再実行を推奨）', 'processing');
+        } else {
+          showStatus('OCR処理が完了しました。内容を確認・修正して「スプレッドシートに保存」を押してください。', 'success');
+        }
 
         currentData = mergedData;
         currentFileName = selectedFile.name;
