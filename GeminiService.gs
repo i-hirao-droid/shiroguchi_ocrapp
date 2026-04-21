@@ -122,28 +122,43 @@ function extractOnePageWithGemini(pageData, pageNum, totalPages) {
 }
 
 /**
- * 実予記号が空欄の場合、上の行のアルファベットを継承する（エラー・縦線誤認識防止版）
+ * 実予記号の単一値を正規化する。
+ * 丁→J、全角→半角に補正したうえで、A-Zの1文字でなければ空文字（＝継承対象）を返す。
+ */
+function normalizeJitsuyoKigo_(raw) {
+  var kigo = raw != null ? String(raw).trim() : '';
+  if (kigo === '') return '';
+
+  // 全角英字→半角、既知の誤認識補正
+  kigo = kigo.replace(/丁/g, 'J');
+  kigo = kigo.replace(/[Ａ-Ｚ]/g, function(ch) {
+    return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+  });
+  kigo = kigo.toUpperCase();
+
+  // A-Zの1文字のみ採用。それ以外（｜ I l 1 ↓ - 等）は継承対象として空文字を返す
+  return /^[A-Z]$/.test(kigo) ? kigo : '';
+}
+
+/**
+ * 実予記号が空欄（＝矢印・縦線・同上マーカー）の場合、
+ * 上の行のアルファベットを継承する。
+ * 次の有効なアルファベットが現れるまでは同じ記号が連続する業務慣習に対応。
  */
 function propagateJitsuyoKigo_(data) {
   if (!data.line_items || data.line_items.length === 0) return data;
   var lastSymbol = null;
   data.line_items.forEach(function(item) {
-    var kigo = item.jitsuyo_kigo != null ? String(item.jitsuyo_kigo).trim() : '';
-    
-    // OCRの誤認識補正
-    kigo = kigo.replace(/丁/g, 'J').replace(/Ｊ/g, 'J').replace(/Ｋ/g, 'K');
-    
-    // 縦線やハイフン、I、l、1 などが来たら「同上（空欄）」として扱う
-    if (kigo.match(/^[\|｜Iｌl1１\-\ー↓]$/)) {
-      kigo = '';
-    }
-    
+    var kigo = normalizeJitsuyoKigo_(item.jitsuyo_kigo);
     if (kigo !== '') {
       lastSymbol = kigo;
-      item.jitsuyo_kigo = lastSymbol;
+      item.jitsuyo_kigo = kigo;
     } else if (lastSymbol) {
       item.jitsuyo_kigo = lastSymbol;
+    } else {
+      item.jitsuyo_kigo = '';
     }
   });
   return data;
 }
+
