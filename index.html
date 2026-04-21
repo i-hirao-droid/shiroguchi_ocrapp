@@ -5,16 +5,22 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', sans-serif; background: #f5f5f5; color: #333; min-height: 100vh; display: flex; justify-content: center; padding: 40px 16px; }
-    .container { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 32px; max-width: 640px; width: 100%; align-self: flex-start; }
+    .container { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 32px; max-width: 960px; width: 100%; align-self: flex-start; }
     h1 { font-size: 20px; margin-bottom: 24px; color: #1a73e8; }
+    h3 { margin: 0 0 8px; font-size: 15px; color: #1a73e8; }
     .upload-area { border: 2px dashed #ccc; border-radius: 8px; padding: 32px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; margin-bottom: 16px; }
     .upload-area:hover, .upload-area.dragover { border-color: #1a73e8; background: #e8f0fe; }
     .upload-area p { color: #666; font-size: 14px; }
     .file-name { font-size: 14px; color: #333; margin-bottom: 16px; display: none; }
     .file-name span { font-weight: bold; }
-    button { background: #1a73e8; color: #fff; border: none; border-radius: 6px; padding: 12px 32px; font-size: 15px; cursor: pointer; width: 100%; transition: background 0.2s; }
+    button { background: #1a73e8; color: #fff; border: none; border-radius: 6px; padding: 12px 32px; font-size: 15px; cursor: pointer; transition: background 0.2s; }
     button:hover { background: #1557b0; }
     button:disabled { background: #ccc; cursor: not-allowed; }
+    button.secondary { background: #fff; color: #1a73e8; border: 1px solid #1a73e8; }
+    button.secondary:hover { background: #e8f0fe; }
+    button.danger { background: #fff; color: #c5221f; border: 1px solid #c5221f; padding: 4px 10px; font-size: 12px; }
+    button.danger:hover { background: #fce8e6; }
+    button.full { width: 100%; }
     .status { margin-top: 20px; padding: 12px 16px; border-radius: 6px; font-size: 14px; display: none; }
     .status.processing { background: #e8f0fe; color: #1a73e8; display: block; }
     .status.success { background: #e6f4ea; color: #137333; display: block; }
@@ -25,12 +31,23 @@
     #progressLabel { font-size: 12px; color: #666; margin-top: 4px; }
     .result { margin-top: 20px; display: none; }
     .result table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }
-    .result th, .result td { border: 1px solid #e0e0e0; padding: 8px 10px; text-align: left; }
-    .result th { background: #f8f9fa; font-weight: 600; width: 35%; }
-    .result a { color: #1a73e8; text-decoration: none; font-weight: 600; }
-    .result a:hover { text-decoration: underline; }
-    .line-items { margin-top: 12px; }
-    .line-items table th { background: #e8f0fe; }
+    .result th, .result td { border: 1px solid #e0e0e0; padding: 6px 8px; text-align: left; vertical-align: middle; }
+    .result th { background: #f8f9fa; font-weight: 600; }
+    .basic-info th { width: 30%; }
+    .line-items table th { background: #e8f0fe; text-align: center; font-size: 12px; }
+    .line-items td { padding: 4px 6px; }
+    .result input, .result select { width: 100%; border: 1px solid transparent; background: transparent; padding: 6px 8px; font-size: 13px; font-family: inherit; color: #333; border-radius: 4px; }
+    .result input:hover, .result select:hover { border-color: #dadce0; }
+    .result input:focus, .result select:focus { border-color: #1a73e8; outline: none; background: #fff; box-shadow: 0 0 0 2px rgba(26,115,232,0.15); }
+    .result input[type="number"] { text-align: right; }
+    .result .col-delete { width: 48px; text-align: center; padding: 4px; }
+    .result .col-no { width: 44px; text-align: center; color: #666; font-size: 12px; background: #fafafa; }
+    .result .summary td:nth-child(2), .result .summary td:nth-child(3) { text-align: right; }
+    .action-bar { display: flex; gap: 12px; margin: 20px 0; flex-wrap: wrap; }
+    .action-bar button { flex: 1; min-width: 180px; }
+    .spreadsheet-link { margin-top: 16px; padding: 14px; background: #e6f4ea; border-radius: 6px; text-align: center; display: none; }
+    .spreadsheet-link a { color: #137333; font-weight: bold; text-decoration: none; font-size: 15px; }
+    .spreadsheet-link a:hover { text-decoration: underline; }
     input[type="file"] { display: none; }
     .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #1a73e8; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -46,7 +63,7 @@
     <input type="file" id="fileInput" accept="application/pdf">
     <div class="file-name" id="fileName">選択中: <span id="fileNameText"></span></div>
 
-    <button id="submitBtn" disabled onclick="handleSubmit()">OCR処理を実行</button>
+    <button id="submitBtn" class="full" disabled onclick="handleSubmit()">OCR処理を実行</button>
 
     <div class="status" id="status"></div>
     <div id="progressWrap">
@@ -62,6 +79,8 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     var selectedFile = null;
     var MAX_SIZE = 10 * 1024 * 1024;
+    var currentData = null;
+    var currentFileName = null;
 
     var uploadArea = document.getElementById('uploadArea');
     var fileInput = document.getElementById('fileInput');
@@ -117,6 +136,32 @@
       return merged;
     }
 
+    // 実予記号の正規化。A-Z 1文字以外は空文字（＝継承対象）
+    function normalizeJitsuyoKigo(raw) {
+      var kigo = raw != null ? String(raw).trim() : '';
+      if (kigo === '') return '';
+      kigo = kigo.replace(/丁/g, 'J');
+      kigo = kigo.replace(/[Ａ-Ｚ]/g, function(ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); });
+      kigo = kigo.toUpperCase();
+      return /^[A-Z]$/.test(kigo) ? kigo : '';
+    }
+
+    // OCR直後のみ適用：空欄（継承対象）→ 直前の有効記号を引き継ぐ
+    function propagateJitsuyoKigo(items) {
+      var lastSymbol = null;
+      items.forEach(function(item) {
+        var kigo = normalizeJitsuyoKigo(item.jitsuyo_kigo);
+        if (kigo !== '') {
+          lastSymbol = kigo;
+          item.jitsuyo_kigo = kigo;
+        } else if (lastSymbol) {
+          item.jitsuyo_kigo = lastSymbol;
+        } else {
+          item.jitsuyo_kigo = '';
+        }
+      });
+    }
+
     async function handleSubmit() {
       if (!selectedFile) return;
       var btn = document.getElementById('submitBtn');
@@ -138,7 +183,7 @@
 
         var pageResults = [];
         for (var i = 0; i < totalPages; i++) {
-          progressFill.style.width = (10 + Math.round((i / totalPages) * 80)) + '%';
+          progressFill.style.width = (10 + Math.round((i / totalPages) * 85)) + '%';
           progressLabel.textContent = 'ページ ' + (i + 1) + ' / ' + totalPages + ' をAI解析中...';
           showStatus('<span class="spinner"></span>Gemini APIでOCR処理中（' + (i + 1) + '/' + totalPages + 'ページ）...', 'processing');
 
@@ -152,40 +197,16 @@
           try { pageResults.push(JSON.parse(rawResult)); } catch (e) { pageResults.push({ line_items: [] }); }
         }
 
-        progressFill.style.width = '90%';
-        progressLabel.textContent = '結果を統合中...';
         var mergedData = mergePageResults(pageResults);
-
-        // クライアント側でも文字列化してエラー・誤認識を防ぐ
-        var prevKigo = null;
-        mergedData.line_items.forEach(function(item) {
-          var kigo = item.jitsuyo_kigo != null ? String(item.jitsuyo_kigo).trim() : '';
-          
-          // OCRの誤認識補正
-          kigo = kigo.replace(/丁/g, 'J').replace(/Ｊ/g, 'J').replace(/Ｋ/g, 'K');
-          
-          // 縦線やハイフン、I、l、1 などが来たら「同上（空欄）」として扱う
-          if (kigo.match(/^[\|｜Iｌl1１\-\ー↓]$/)) {
-            kigo = '';
-          }
-
-          if (kigo !== '') {
-            prevKigo = kigo;
-            item.jitsuyo_kigo = prevKigo;
-          } else if (prevKigo) {
-            item.jitsuyo_kigo = prevKigo;
-          }
-        });
-
-        showStatus('<span class="spinner"></span>スプレッドシートに書き込み中...', 'processing');
-        var saveResult = await new Promise(function(resolve, reject) {
-          google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).saveToSpreadsheet(mergedData, selectedFile.name);
-        });
+        propagateJitsuyoKigo(mergedData.line_items);
 
         progressFill.style.width = '100%';
         progressLabel.textContent = '全' + totalPages + 'ページ処理完了';
-        showStatus('処理が完了しました。', 'success');
-        displayResult({ data: mergedData, spreadsheetUrl: saveResult.spreadsheetUrl });
+        showStatus('OCR処理が完了しました。内容を確認・修正して「スプレッドシートに保存」を押してください。', 'success');
+
+        currentData = mergedData;
+        currentFileName = selectedFile.name;
+        renderEditor();
 
       } catch (err) {
         showStatus('エラー: ' + esc(err.message || String(err)), 'error');
@@ -194,53 +215,170 @@
       }
     }
 
-    function displayResult(result) {
-      var d = result.data;
-      
-      // 一番上にスプレッドシートを開くボタンを配置
-      var html = '<div style="margin-bottom: 24px;">';
-      html += '<a href="' + esc(result.spreadsheetUrl) + '" target="_blank" style="display:block; background:#1a73e8; color:#fff; padding:12px 24px; text-decoration:none; border-radius:6px; font-weight:bold; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,0.1); transition:background 0.2s;">';
-      html += '📄 スプレッドシートを開く</a></div>';
+    // 編集可能なプレビューを描画
+    function renderEditor() {
+      var d = currentData;
+      var html = '';
 
-      // 実予記号集計（ボタンの直下に配置）
-      if (d.line_items && d.line_items.length > 0) {
-        var codeGroups = {};
-        d.line_items.forEach(function(item) {
-          var code = item.jitsuyo_kigo || '(未分類)';
-          if (!codeGroups[code]) codeGroups[code] = { total: 0, count: 0 };
-          codeGroups[code].total += (item.amount || 0);
-          codeGroups[code].count += 1;
-        });
-
-        html += '<div class="line-items" style="margin-bottom: 20px;"><h3 style="margin:0 0 8px;font-size:15px;color:#1a73e8">実予記号集計</h3><table><tr><th>実予記号</th><th>合計金額</th><th>明細数</th></tr>';
-        Object.keys(codeGroups).forEach(function(code) {
-          html += '<tr><td>' + esc(code) + '</td><td>' + formatNum(codeGroups[code].total) + '</td><td>' + codeGroups[code].count + '</td></tr>';
-        });
-        html += '</table></div>';
-      }
-
-      // 基本情報
-      html += '<h3 style="margin:0 0 8px;font-size:15px;color:#1a73e8">基本情報</h3><table>';
-      html += row('請求元', d.sender_name); html += row('請求日', d.issue_date); html += row('納品先名', d.delivery_destination);
-      html += row('商品合計', formatNum(d.subtotal)); html += row('消費税', formatNum(d.tax_amount)); html += row('総合計', formatNum(d.total_amount));
+      // 基本情報（編集可能）
+      html += '<h3>基本情報（修正できます）</h3>';
+      html += '<table class="basic-info">';
+      html += infoRow('請求元', 'sender_name', d.sender_name, 'text');
+      html += infoRow('請求日', 'issue_date', d.issue_date, 'text');
+      html += infoRow('納品先名', 'delivery_destination', d.delivery_destination, 'text');
+      html += infoRow('商品合計', 'subtotal', d.subtotal, 'number');
+      html += infoRow('消費税', 'tax_amount', d.tax_amount, 'number');
+      html += infoRow('総合計', 'total_amount', d.total_amount, 'number');
       html += '</table>';
 
-      // 明細
-      if (d.line_items && d.line_items.length > 0) {
-        html += '<div class="line-items" style="margin-top: 20px;"><h3 style="margin:0 0 8px;font-size:15px;color:#1a73e8">明細</h3><table><tr><th>納品日</th><th>商品名</th><th>数量</th><th>単価</th><th>実予記号</th><th>金額</th></tr>';
-        d.line_items.forEach(function(item) {
-          html += '<tr><td>' + esc(item.delivery_date || '-') + '</td><td>' + esc(item.item_name) + '</td><td>' + (item.quantity != null ? item.quantity : '-') + '</td><td>' + formatNum(item.unit_price) + '</td><td>' + esc(item.jitsuyo_kigo || '-') + '</td><td>' + formatNum(item.amount) + '</td></tr>';
-        });
-        html += '</table></div>';
-      }
+      // 明細（編集可能）
+      html += '<div class="line-items" style="margin-top:20px;"><h3>明細（修正できます）</h3>';
+      html += '<table><thead><tr>';
+      html += '<th class="col-no">No.</th><th style="width:110px;">納品日</th><th>商品名</th><th style="width:70px;">数量</th><th style="width:90px;">単価</th><th style="width:90px;">実予記号</th><th style="width:110px;">金額</th><th class="col-delete">削除</th>';
+      html += '</tr></thead><tbody id="lineItemsBody">';
+      (d.line_items || []).forEach(function(item, idx) {
+        html += renderLineItemRow(item, idx);
+      });
+      html += '</tbody></table>';
+      html += '<button class="secondary" style="margin-top:8px;padding:8px 16px;font-size:13px;" onclick="addLineItem()">＋ 行を追加</button>';
+      html += '</div>';
 
-      var resultDiv = document.getElementById('result'); 
-      resultDiv.innerHTML = html; 
+      // 実予記号集計（自動再計算）
+      html += '<div class="line-items" style="margin-top:20px;"><h3>実予記号集計（自動計算）</h3>';
+      html += '<table class="summary"><thead><tr><th>実予記号</th><th>合計金額</th><th>明細数</th></tr></thead><tbody id="summaryBody"></tbody></table>';
+      html += '</div>';
+
+      // アクションバー
+      html += '<div class="action-bar">';
+      html += '<button id="saveBtn" onclick="handleSave()">📄 スプレッドシートに保存</button>';
+      html += '</div>';
+
+      html += '<div class="spreadsheet-link" id="spreadsheetLink"></div>';
+
+      var resultDiv = document.getElementById('result');
+      resultDiv.innerHTML = html;
       resultDiv.style.display = 'block';
+
+      bindEditors();
+      updateSummary();
     }
 
-    function row(label, value) { return '<tr><th>' + esc(label) + '</th><td>' + esc(String(value != null ? value : '-')) + '</td></tr>'; }
-    function formatNum(n) { return n == null ? '-' : Number(n).toLocaleString(); }
+    function infoRow(label, key, value, type) {
+      var attr = type === 'number' ? ' type="number" step="any"' : ' type="text"';
+      var v = value != null ? value : '';
+      return '<tr><th>' + esc(label) + '</th><td><input data-field="' + key + '"' + attr + ' value="' + esc(String(v)) + '"></td></tr>';
+    }
+
+    function renderLineItemRow(item, idx) {
+      var v = function(x) { return x != null ? x : ''; };
+      var options = ['<option value=""></option>'];
+      for (var c = 65; c <= 90; c++) {
+        var ch = String.fromCharCode(c);
+        var sel = item.jitsuyo_kigo === ch ? ' selected' : '';
+        options.push('<option value="' + ch + '"' + sel + '>' + ch + '</option>');
+      }
+      return '<tr data-idx="' + idx + '">' +
+        '<td class="col-no">' + (idx + 1) + '</td>' +
+        '<td><input data-line="delivery_date" type="text" value="' + esc(String(v(item.delivery_date))) + '"></td>' +
+        '<td><input data-line="item_name" type="text" value="' + esc(String(v(item.item_name))) + '"></td>' +
+        '<td><input data-line="quantity" type="number" step="any" value="' + esc(String(v(item.quantity))) + '"></td>' +
+        '<td><input data-line="unit_price" type="number" step="any" value="' + esc(String(v(item.unit_price))) + '"></td>' +
+        '<td><select data-line="jitsuyo_kigo">' + options.join('') + '</select></td>' +
+        '<td><input data-line="amount" type="number" step="any" value="' + esc(String(v(item.amount))) + '"></td>' +
+        '<td class="col-delete"><button class="danger" onclick="removeLineItem(' + idx + ')">削除</button></td>' +
+        '</tr>';
+    }
+
+    function bindEditors() {
+      // 基本情報の変更を currentData に反映
+      document.querySelectorAll('[data-field]').forEach(function(el) {
+        el.addEventListener('input', function() {
+          var key = el.getAttribute('data-field');
+          var val = el.value;
+          if (el.type === 'number') {
+            currentData[key] = val === '' ? null : Number(val);
+          } else {
+            currentData[key] = val === '' ? null : val;
+          }
+        });
+      });
+      // 明細の変更を currentData.line_items に反映 + 集計更新
+      var body = document.getElementById('lineItemsBody');
+      body.addEventListener('input', onLineItemChange);
+      body.addEventListener('change', onLineItemChange);
+    }
+
+    function onLineItemChange(e) {
+      var el = e.target;
+      var key = el.getAttribute('data-line');
+      if (!key) return;
+      var row = el.closest('tr');
+      var idx = Number(row.getAttribute('data-idx'));
+      var item = currentData.line_items[idx];
+      if (!item) return;
+      var val = el.value;
+      if (key === 'quantity' || key === 'unit_price' || key === 'amount') {
+        item[key] = val === '' ? null : Number(val);
+      } else {
+        item[key] = val === '' ? null : val;
+      }
+      if (key === 'amount' || key === 'jitsuyo_kigo') updateSummary();
+    }
+
+    function addLineItem() {
+      currentData.line_items.push({ delivery_date: null, item_name: '', quantity: null, unit_price: null, jitsuyo_kigo: '', amount: null });
+      rerenderLineItems();
+    }
+
+    function removeLineItem(idx) {
+      currentData.line_items.splice(idx, 1);
+      rerenderLineItems();
+    }
+
+    function rerenderLineItems() {
+      var body = document.getElementById('lineItemsBody');
+      body.innerHTML = currentData.line_items.map(function(item, i) { return renderLineItemRow(item, i); }).join('');
+      updateSummary();
+    }
+
+    function updateSummary() {
+      var groups = {};
+      (currentData.line_items || []).forEach(function(item) {
+        var code = item.jitsuyo_kigo || '(未分類)';
+        if (!groups[code]) groups[code] = { total: 0, count: 0 };
+        groups[code].total += Number(item.amount) || 0;
+        groups[code].count += 1;
+      });
+      var rows = Object.keys(groups).sort().map(function(code) {
+        return '<tr><td>' + esc(code) + '</td><td>' + formatNum(groups[code].total) + '</td><td>' + groups[code].count + '</td></tr>';
+      });
+      var body = document.getElementById('summaryBody');
+      if (body) body.innerHTML = rows.join('') || '<tr><td colspan="3" style="text-align:center;color:#888;">明細なし</td></tr>';
+    }
+
+    async function handleSave() {
+      var btn = document.getElementById('saveBtn');
+      btn.disabled = true;
+      var originalText = btn.textContent;
+      btn.innerHTML = '<span class="spinner"></span>保存中...';
+      showStatus('<span class="spinner"></span>スプレッドシートに書き込み中...', 'processing');
+
+      try {
+        var saveResult = await new Promise(function(resolve, reject) {
+          google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).saveToSpreadsheet(currentData, currentFileName);
+        });
+        showStatus('スプレッドシートへの保存が完了しました。', 'success');
+        var linkDiv = document.getElementById('spreadsheetLink');
+        linkDiv.innerHTML = '<a href="' + esc(saveResult.spreadsheetUrl) + '" target="_blank">📄 スプレッドシートを開く</a>';
+        linkDiv.style.display = 'block';
+      } catch (err) {
+        showStatus('保存エラー: ' + esc(err.message || String(err)), 'error');
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    }
+
+    function formatNum(n) { return n == null || isNaN(n) ? '-' : Number(n).toLocaleString(); }
     function esc(s) { var div = document.createElement('div'); div.textContent = s; return div.innerHTML; }
     function showStatus(msg, type) { var el = document.getElementById('status'); el.innerHTML = msg; el.className = 'status ' + type; }
     function hideStatus() { document.getElementById('status').className = 'status'; document.getElementById('progressWrap').style.display = 'none'; }
