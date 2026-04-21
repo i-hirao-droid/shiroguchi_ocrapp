@@ -7,7 +7,6 @@ function doGet() {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
-
 /**
  * 1ページ分のJPEG画像をGemini APIでOCR処理する
  * @param {Object} pageData - {data: "data:image/jpeg;base64,...", mimeType: "image/jpeg"}
@@ -24,7 +23,6 @@ function processOnePage(pageData, pageNum, totalPages) {
     return JSON.stringify({ line_items: [], error: e.message });
   }
 }
-
 
 /**
  * 全ページの結果を統合してスプレッドシートに書き込む
@@ -44,4 +42,3 @@ function saveToSpreadsheet(mergedData, fileName) {
     throw e;
   }
 }
-
